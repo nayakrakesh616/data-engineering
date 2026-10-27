@@ -1,10 +1,3 @@
-# ──────────────────────────────────────────────────
-# Link        https://www.hackerrank.com/challenges/py-if-else/problem?isFullScreen=true
-# Problem     Python If-Else
-# Difficulty  Easy
-# Subdomain   Introduction
-# Platform    HackerRank
-# Language    python3
 # Status      Accepted
 # Submitted   2026-10-27, 11:08 p.m.
 # ──────────────────────────────────────────────────
