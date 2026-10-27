@@ -1,63 +1,42 @@
 name: Sync & Sort Leetcode Submissions
-
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: "0 0 * * *"
-
+workflow_dispatch:
+schedule:
+- cron: "0 0 * * *"
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Fetch LeetCode Solutions
-        uses: joshcai/leetcode-sync@v1.7
-        with:
-          github-token: ${{ github.token }}
-          leetcode-csrf-token: ${{ secrets.LEETCODE_CSRF_TOKEN }}
-          leetcode-session: ${{ secrets.LEETCODE_SESSION }}
-          destination-folder: 'staging_zone'
-
-      - name: Route Files to Correct Folders
-        run: |
-          mkdir -p python sql
-          
-          if [ -d "staging_zone" ]; then
-            echo "Sorting files..."
-            
-            for dir in staging_zone/*/; do
-              if [ -d "$dir" ]; then
-                # Check for Python files
-                if ls "$dir"*.py >/dev/null 2>&1; then
-                  echo "Moving Python: $dir"
-                  cp -r "$dir" python/
-                # Check for any SQL type file
-                elif ls "$dir"*.sql >/dev/null 2>&1 || ls "$dir"*.mysql >/dev/null 2>&1 || ls "$dir"*.mssql >/dev/null 2>&1; then
-                  echo "Moving SQL: $dir"
-                  cp -r "$dir" sql/
-                else
-                  # Fallback defaults database files here
-                  echo "Defaulting to SQL folder: $dir"
-                  cp -r "$dir" sql/
-                fi
-              fi
-            done
-            
-            rm -rf staging_zone
-          fi
-
-      - name: Commit and Push Changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@://github.com"
-          
-          # Force clear the old stuck staging_zone folder out of GitHub
-          git rm -rf staging_zone --ignore-unmatch
-          
-          git add python/ sql/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Automated Sync: Cleaned staging zone and sorted files" && git push)
+build:
+runs-on: ubuntu-latest
+steps:
+- name: Checkout Repo
+uses: actions/checkout@v4
+with:
+fetch-depth: 0
+- name: Fetch LeetCode Solutions
+uses: joshcai/leetcode-sync@v1.7
+with:
+github-token: ${{ github.token }}
+leetcode-csrf-token: ${{ secrets.LEETCODE_CSRF_TOKEN }}
+leetcode-session: ${{ secrets.LEETCODE_SESSION }}
+destination-folder: 'staging_zone'
+- name: Route Files to Correct Folders
+run: |
+mkdir -p "python/leetcode python practice"
+mkdir -p "sql/leetcode sql practice"
+if [ -d "staging_zone" ]; then
+echo "Sorting files..."
+for dir in staging_zone//; do
+if [ -d "$dir" ]; then
+if ls "$dir".py >/dev/null 2>&1; then
+echo "Moving Python: $dir"
+cp -r "$dir" "python/leetcode python practice/"
+elif ls "$dir".sql >/dev/null 2>&1 || ls "\(dir"*.mysql >/dev/null 2>&1 \vert{}\vert{} ls "\)dir".mssql >/dev/null 2>&1; then
+echo "Moving SQL: $dir"
+cp -r "$dir" "sql/leetcode sql practice/"
+else
+echo "Defaulting database file to SQL practice folder: $dir"
+cp -r "$dir" "sql/leetcode sql practice/"
+fi
+fi
+done
+rm -rf staging_zone
+fi
