@@ -18,36 +18,37 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Clone Private HackerRank Solutions Repo
+      - name: Clone Public HackerRank Solutions Repo
         run: |
-          # Uses your secure custom secret token to securely access your private repository
-          git clone https://${{ secrets.REPO_SYNC_TOKEN }}@://github.com{{ github.repository_owner }}/hackerrank-solutions.git temp_hr_repo
+          # Clones your repository into a temporary local runner directory
+          git clone https://github.com{{ github.repository_owner }}/hackerrank-solutions.git temp_hr_repo
 
       - name: Distribute and Organize Files
         run: |
+          # Create target structural folders
           mkdir -p "sql/hackerrank sql practice"
           mkdir -p "python/hackerrank python practice"
 
-          if [ -d "temp_hr_repo/solutions" ]; then
-            echo "Processing and distributing HackerRank solutions..."
+          echo "Scanning cloned files..."
+          
+          # Sort and move Python scripts (.py)
+          find temp_hr_repo -type f -name "*.py" | while read -r file; do
+            filename=$(basename "$file")
+            # Avoid copying internal git files
+            if [[ "$file" != *".github"* ]]; then
+              echo "Moving Python file: $filename"
+              cp "$file" "python/hackerrank python practice/"
+            fi
+          done
 
-            # Find and copy Python submissions
-            find temp_hr_repo/solutions -type f \( -name "*.py" -o -name "*.py3" \) | while read -r file; do
-              problem_name=$(basename "$(dirname "$file")")
-              mkdir -p "python/hackerrank python practice/$problem_name"
-              cp "$file" "python/hackerrank python practice/$problem_name/"
-            done
+          # Sort and move SQL scripts (.sql, .mysql)
+          find temp_hr_repo -type f \( -name "*.sql" -o -name "*.mysql" \) | while read -r file; do
+            filename=$(basename "$file")
+            echo "Moving SQL file: $filename"
+            cp "$file" "sql/hackerrank sql practice/"
+          done
 
-            # Find and copy SQL submissions (.sql, .mysql)
-            find temp_hr_repo/solutions -type f \( -name "*.sql" -o -name "*.mysql" \) | while read -r file; do
-              problem_name=$(basename "$(dirname "$file")")
-              mkdir -p "sql/hackerrank sql practice/$problem_name"
-              cp "$file" "sql/hackerrank sql practice/$problem_name/"
-            done
-          else
-            echo "No submissions found yet."
-          fi
-
+          # Clean up temporary cloned repository folder
           rm -rf temp_hr_repo
 
       - name: Commit and Push to Master
