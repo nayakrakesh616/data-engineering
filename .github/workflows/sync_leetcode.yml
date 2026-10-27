@@ -1,9 +1,9 @@
 name: Sync & Sort Leetcode Submissions
 
 on:
-  workflow_dispatch: # Allows you to run it manually anytime
+  workflow_dispatch:
   schedule:
-    - cron: "0 0 * * *" # Runs automatically every night at midnight
+    - cron: "0 0 * * *"
 
 jobs:
   build:
@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Fetch LeetCode Solutions
         uses: joshcai/leetcode-sync@v1.7
@@ -23,7 +25,6 @@ jobs:
 
       - name: Route Files to Correct Folders
         run: |
-          # Create python and sql directories if they do not exist
           mkdir -p python sql
           
           if [ -d "staging_zone" ]; then
@@ -31,26 +32,32 @@ jobs:
             
             for dir in staging_zone/*/; do
               if [ -d "$dir" ]; then
-                # Check if the folder contains a python file
+                # Check for Python files
                 if ls "$dir"*.py >/dev/null 2>&1; then
-                  mv "$dir" python/
-                # Check if the folder contains an SQL file
-                elif ls "$dir"*.sql >/dev/null 2>&1; then
-                  mv "$dir" sql/
+                  echo "Moving Python: $dir"
+                  cp -r "$dir" python/
+                # Check for any SQL type file
+                elif ls "$dir"*.sql >/dev/null 2>&1 || ls "$dir"*.mysql >/dev/null 2>&1 || ls "$dir"*.mssql >/dev/null 2>&1; then
+                  echo "Moving SQL: $dir"
+                  cp -r "$dir" sql/
                 else
-                  mv "$dir" ./
+                  # Fallback defaults database files here
+                  echo "Defaulting to SQL folder: $dir"
+                  cp -r "$dir" sql/
                 fi
               fi
             done
             
             rm -rf staging_zone
-          else
-            echo "No new solutions fetched."
           fi
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@://github.com"
+          
+          # Force clear the old stuck staging_zone folder out of GitHub
+          git rm -rf staging_zone --ignore-unmatch
+          
           git add python/ sql/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Automated Sync: Sorted LeetCode solutions" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Automated Sync: Cleaned staging zone and sorted files" && git push)
