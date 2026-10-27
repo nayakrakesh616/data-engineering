@@ -1,9 +1,9 @@
 name: Sync HackerRank Submissions
 
 on:
-  workflow_dispatch: # Allows you to run it manually anytime
+  workflow_dispatch:
   schedule:
-    - cron: '0 6 * * *' # Runs automatically every morning
+    - cron: '0 6 * * *'
 
 jobs:
   pull-and-sort-hackerrank:
@@ -18,14 +18,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Clone HackerRank Solutions Repo
+      - name: Clone Private HackerRank Solutions Repo
         run: |
-          # Clone your secondary repository where the extension pushes files
-          git clone https://github.com{{ github.repository_owner }}/hackerrank-solutions.git temp_hr_repo
+          # Uses your secure custom secret token to securely access your private repository
+          git clone https://${{ secrets.REPO_SYNC_TOKEN }}@://github.com{{ github.repository_owner }}/hackerrank-solutions.git temp_hr_repo
 
       - name: Distribute and Organize Files
         run: |
-          # Ensure final structural paths exist
           mkdir -p "sql/hackerrank sql practice"
           mkdir -p "python/hackerrank python practice"
 
@@ -46,10 +45,9 @@ jobs:
               cp "$file" "sql/hackerrank sql practice/$problem_name/"
             done
           else
-            echo "No solutions directory found in the extension repository yet."
+            echo "No submissions found yet."
           fi
 
-          # Clean up the temporary workspace folder
           rm -rf temp_hr_repo
 
       - name: Commit and Push to Master
