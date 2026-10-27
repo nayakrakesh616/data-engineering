@@ -22,23 +22,37 @@ jobs:
         run: |
           git clone https://github.com{{ github.repository_owner }}/hackerrank-solutions.git hr_files
 
-      - name: 3. Organize Folder Structure
+      - name: 3. Process and Move Files via Python
+        shell: python
         run: |
-          mkdir -p "sql/hackerrank sql practice"
-          mkdir -p "python/hackerrank python practice"
+          import os
+          import shutil
+          from pathlib import Path
 
-      - name: 4. Move Submissions
-        run: |
-          # Copy Python files if any exist
-          cp -r hr_files/*.py "python/hackerrank python practice/" 2>/dev/null || true
-          cp -r hr_files/**/*.py "python/hackerrank python practice/" 2>/dev/null || true
+          # Setup primary targets directories
+          sql_target = Path("sql/hackerrank sql practice")
+          py_target = Path("python/hackerrank python practice")
           
-          # Copy SQL files if any exist
-          cp -r hr_files/*.sql "sql/hackerrank sql practice/" 2>/dev/null || true
-          cp -r hr_files/**/*.sql "sql/hackerrank sql practice/" 2>/dev/null || true
-          
-          # Remove the temporary folder
-          rm -rf hr_files
+          sql_target.mkdir(parents=True, exist_ok=True)
+          py_target.mkdir(parents=True, exist_ok=True)
+
+          source_dir = Path("hr_files")
+          if source_dir.exists():
+              # Recursively seek files
+              for file_path in source_dir.rglob("*"):
+                  if file_path.is_file() and not any(part.startswith('.') for part in file_path.parts):
+                      # Identify Python files
+                      if file_path.suffix in ['.py', '.py3']:
+                          print(f"Routing Python solution: {file_path.name}")
+                          shutil.copy(file_path, py_target / file_path.name)
+                      
+                      # Identify SQL files
+                      elif file_path.suffix in ['.sql', '.mysql']:
+                          print(f"Routing SQL solution: {file_path.name}")
+                          shutil.copy(file_path, sql_target / file_path.name)
+
+      - name: 4. Workspace Cleanup
+        run: rm -rf hr_files
 
       - name: 5. Push Clean Structure
         uses: stefanzweifel/git-auto-commit-action@v5
