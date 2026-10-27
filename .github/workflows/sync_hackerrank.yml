@@ -12,49 +12,64 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout Code Base
+      - name: 1. Checkout Data Engineering Repo
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          path: main_repo
           fetch-depth: 0
 
-      - name: Process Submissions
+      - name: 2. Checkout HackerRank Solutions Repo
+        uses: actions/checkout@v4
+        with:
+          repository: '${{ github.repository_owner }}/hackerrank-solutions'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: hr_files
+
+      - name: 3. Process and Move Files
         run: |
-          # 1. Force clean the target directory structure
-          mkdir -p "sql/hackerrank sql practice"
-          mkdir -p "python/hackerrank python practice"
+          # Create target structural folders cleanly inside the main repo workspace
+          mkdir -p "main_repo/sql/hackerrank sql practice"
+          mkdir -p "main_repo/python/hackerrank python practice"
 
-          # 2. Clone the public submissions repo (Removed '|| true' to see explicit errors)
-          echo "Cloning hackerrank-solutions repository..."
-          git clone https://github.com hr_files
-
-          # 3. Verify if files exist and move them explicitly without subshell loops
+          # Verify if the extension's solutions folder structure exists
           if [ -d "hr_files/solutions" ]; then
-            echo "Solutions directory found! Copying files..."
+            echo "Solutions directory found! Copying files across deep folders..."
             
-            # Use standard find and copy directly to target folders
-            find hr_files/solutions -type f \( -name "*.py" -o -name "*.py3" \) -exec cp {} "python/hackerrank python practice/" \; 2>/dev/null || true
-            find hr_files/solutions -type f \( -name "*.sql" -o -name "*.mysql" \) -exec cp {} "sql/hackerrank sql practice/" \; 2>/dev/null || true
+            # Find all Python files at any depth level and extract their folder structures
+            find hr_files/solutions -type f \( -name "*.py" -o -name "*.py3" \) | while read -r file; do
+              problem_folder=$(basename "$(dirname "$file")")
+              target_dir="main_repo/python/hackerrank python practice/$problem_folder"
+              mkdir -p "$target_dir"
+              cp "$file" "$target_dir/"
+            done
+            
+            # Find all SQL files at any depth level and extract their folder structures
+            find hr_files/solutions -type f \( -name "*.sql" -o -name "*.mysql" \) | while read -r file; do
+              problem_folder=$(basename "$(dirname "$file")")
+              target_dir="main_repo/sql/hackerrank sql practice/$problem_folder"
+              mkdir -p "$target_dir"
+              cp "$file" "$target_dir/"
+            done
           else
-            echo "Warning: solutions directory not found in the cloned repository layout."
+            echo "No files found in the source solutions repository path yet."
           fi
 
-          # Clean up the temp cloning directory
-          rm -rf hr_files
-
-      - name: Deploy Structural Updates
+      - name: 4. Deploy Structural Updates to Master Branch
         run: |
+          cd main_repo
+          
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
           
           # Stage the newly populated practice folders
           git add "python/hackerrank python practice/" "sql/hackerrank sql practice/"
 
-          # Check changes and push to master branch
+          # Check changes and push to master branch safely
           if ! git diff --cached --quiet; then
-            echo "Changes detected! Committing to master..."
+            echo "New files detected! Committing to master branch..."
             git commit -m "Automated Sync: HackerRank practices organized by domain folders"
             git push origin master
           else
-            echo "No new files were transferred. Repository is up to date."
+            echo "Everything is already perfectly up to date!"
           fi
