@@ -3,11 +3,13 @@ name: Sync LeetCode Submissions
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *' # Runs every day at midnight
+    - cron: '0 0 * * *'
 
 jobs:
-  build:
+  sync-and-organize:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -24,35 +26,37 @@ jobs:
           leetcode-session: ${{ secrets.LEETCODE_SESSION }}
           destination-folder: 'staging_zone'
 
-      - name: Organize Files and Purge Staging Zone
+      - name: Pull Action Commits and Re-organize
         run: |
-          # Create target directories if they don't exist
+          # The action commits directly to the remote repository. 
+          # We must pull those automated commits first to avoid conflict failures.
+          git pull origin master
+
+          # Create the final target directories
           mkdir -p "sql/leetcode sql practice"
           mkdir -p "python/leetcode python practice"
 
-          # Check if staging_zone exists and has files
-          if [ -d "staging_zone" ]; then
-            # Move SQL files (.sql extensions)
-            find staging_zone -type f \( -name "*.sql" \) -exec mv {} "sql/leetcode sql practice/" \; 2>/dev/null || true
+          # Relocate SQL files
+          find staging_zone -type f \( -name "*.sql" \) -exec mv {} "sql/leetcode sql practice/" \; 2>/dev/null || true
 
-            # Move Python files (.py extensions)
-            find staging_zone -type f \( -name "*.py" \) -exec mv {} "python/leetcode python practice/" \; 2>/dev/null || true
+          # Relocate Python files
+          find staging_zone -type f \( -name "*.py" \) -exec mv {} "python/leetcode python practice/" \; 2>/dev/null || true
 
-            # Wipe out the staging_zone folder completely from git tracking
-            git rm -rf staging_zone --ignore-unmatch
-            rm -rf staging_zone
-          fi
+          # Wipe out the staging_zone completely from Git tracking history
+          git rm -rf staging_zone --ignore-unmatch
+          rm -rf staging_zone
 
-      - name: Commit and Push Changes
-        run: |
+          # Configure Git credentials for pushing the layout adjustment
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add "sql/leetcode sql practice/*" "python/leetcode python practice/*"
           
-          # Commit only if there are changes to avoid workflow errors
+          # Stage the moved folders and the deletion of staging_zone
+          git add "sql/leetcode sql practice/" "python/leetcode python practice/"
+
+          # Commit and push only if structural changes were made
           if ! git diff --cached --quiet; then
-            git commit -m "Sync and organize LeetCode submissions"
+            git commit -m "Clean repo structure: route scripts from staging to specific languages"
             git push origin master
           else
-            echo "No new changes to commit."
+            echo "Structure matches target architecture perfectly. No action needed."
           fi
