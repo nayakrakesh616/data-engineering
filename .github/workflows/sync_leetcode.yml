@@ -1,0 +1,56 @@
+name: Sync & Sort Leetcode Submissions
+
+on:
+  workflow_dispatch: # Allows you to run it manually anytime
+  schedule:
+    - cron: "0 0 * * *" # Runs automatically every night at midnight
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Fetch LeetCode Solutions
+        uses: joshcai/leetcode-sync@v1.7
+        with:
+          github-token: ${{ github.token }}
+          leetcode-csrf-token: ${{ secrets.LEETCODE_CSRF_TOKEN }}
+          leetcode-session: ${{ secrets.LEETCODE_SESSION }}
+          destination-folder: 'staging_zone'
+
+      - name: Route Files to Correct Folders
+        run: |
+          # Create python and sql directories if they do not exist
+          mkdir -p python sql
+          
+          if [ -d "staging_zone" ]; then
+            echo "Sorting files..."
+            
+            for dir in staging_zone/*/; do
+              if [ -d "$dir" ]; then
+                # Check if the folder contains a python file
+                if ls "$dir"*.py >/dev/null 2>&1; then
+                  mv "$dir" python/
+                # Check if the folder contains an SQL file
+                elif ls "$dir"*.sql >/dev/null 2>&1; then
+                  mv "$dir" sql/
+                else
+                  mv "$dir" ./
+                fi
+              fi
+            done
+            
+            rm -rf staging_zone
+          else
+            echo "No new solutions fetched."
+          fi
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          git add python/ sql/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Automated Sync: Sorted LeetCode solutions" && git push)
