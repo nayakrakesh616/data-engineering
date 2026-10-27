@@ -15,7 +15,7 @@ jobs:
         with:
           repository: '${{ github.repository_owner }}/hackerrank-solutions'
           ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.REPO_SYNC_TOKEN }} # Authenticates using your master secret key
           path: hr_files
 
       - name: 2. Process, Clean Headers, and Commit via GitHub API
@@ -27,9 +27,9 @@ jobs:
           import json
           from pathlib import Path
 
-          # Setup basic API transaction contexts
-          token = "${{ secrets.GITHUB_TOKEN }}"
-          repo = os.environ.get('GITHUB_REPOSITORY') # Targets your 'data-engineering' repo
+          # Use your master secret token to guarantee authorization pass rules
+          token = "${{ secrets.REPO_SYNC_TOKEN }}"
+          repo = os.environ.get('GITHUB_REPOSITORY')
           
           def clean_file_content(source_path):
               """Reads the file and discards the metadata text injected at the top."""
@@ -49,7 +49,7 @@ jobs:
 
           def get_sha(repo_path):
               """Checks if the file already exists on master branch to get its tracking SHA hash."""
-              url = f"https://github.com{repo}/contents/{repo_path}?ref=master"
+              url = f"https://api.github.com/repos/{repo}/contents/{repo_path}?ref=master"
               req = urllib.request.Request(url)
               req.add_header("Authorization", f"token {token}")
               try:
@@ -62,7 +62,7 @@ jobs:
           def upload_to_github(repo_path, file_content):
               """Directly updates or creates files on the master branch via the GitHub Contents API."""
               sha = get_sha(repo_path)
-              url = f"https://github.com{repo}/contents/{repo_path}"
+              url = f"https://api.github.com/repos/{repo}/contents/{repo_path}"
               
               payload = {
                   "message": f"Automated Sync: Cleaned solution uploaded for {Path(repo_path).name}",
