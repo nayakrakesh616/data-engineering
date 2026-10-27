@@ -10,7 +10,7 @@ Welcome to my personal Python reference library! This repository tracks my progr
 In my first script, I practiced basic variables. Later, I created a clean, runnable script using modern F-strings.
 
 ### Code Example
-You can check out and run the complete script here: **[f_strings.py](./f_strings.py)**
+You can check out and run the complete script here: **[f_string.py](./f_string.py)**
 
 ```python
 name = "Rakesh"
