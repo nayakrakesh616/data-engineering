@@ -26,51 +26,74 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           path: hr_files
 
-      - name: 3. Process and Move Files
+      - name: 3. Process, Clean Headers, and Move Files
+        shell: python
         run: |
-          # Create target structural folders cleanly inside the main repo workspace
-          mkdir -p "main_repo/sql/hackerrank sql practice"
-          mkdir -p "main_repo/python/hackerrank python practice"
+          import os
+          from pathlib import Path
 
-          echo "Scanning all downloaded solutions..."
+          # Setup final targets directories inside the main repo workspace
+          sql_target = Path("main_repo/sql/hackerrank sql practice")
+          py_target = Path("main_repo/python/hackerrank python practice")
           
-          # --- PYTHON EXTRACTOR ---
-          # Look for any Python challenge code files inside the cloned repo
-          find hr_files -type f \( -name "*.py" -o -name "*.py3" \) ! -path '*/.*' | while read -r file; do
-            # Extract the actual challenge folder slug name (e.g., 'py-if-else')
-            problem_folder=$(basename "$(dirname "$file")")
-            target_dir="main_repo/python/hackerrank python practice/$problem_folder"
-            
-            mkdir -p "$target_dir"
-            echo "Routing Python challenge to: python/hackerrank python practice/$problem_folder"
-            cp "$file" "$target_dir/"
-          done
-          
-          # --- MULTI-DIALECT SQL EXTRACTOR ---
-          # Look for any SQL dialect challenge files inside the cloned repo
-          find hr_files -type f \( -name "*.sql" -o -name "*.mysql" -o -name "*.mssql" -o -name "*.oracle" \) ! -path '*/.*' | while read -r file; do
-            problem_folder=$(basename "$(dirname "$file")")
-            target_dir="main_repo/sql/hackerrank sql practice/$problem_folder"
-            
-            mkdir -p "$target_dir"
-            echo "Routing SQL challenge to: sql/hackerrank sql practice/$problem_folder"
-            cp "$file" "$target_dir/"
-          done
+          sql_target.mkdir(parents=True, exist_ok=True)
+          py_target.mkdir(parents=True, exist_ok=True)
 
-      - name: 4. Deploy Structural Updates to Master Branch
+          def clean_file_content(source_path, dest_path):
+              """Reads the file, removes the header comments up to the dashes line, and writes the pure code."""
+              with open(source_path, 'r', encoding='utf-8', errors='ignore') as f:
+                  lines = f.readlines()
+              
+              # Find where the extension header ends (the line with ----------)
+              cut_index = 0
+              for idx, line in enumerate(lines[:15]): # Scan first 15 lines max
+                  if '----------' in line:
+                      cut_index = idx + 1
+                      break
+              
+              # Extract only the pure solution code lines
+              clean_lines = lines[cut_index:]
+              
+              # Remove any extra leading empty lines left over after stripping
+              while clean_lines and clean_lines[0].strip() == '':
+                  clean_lines.pop(0)
+                  
+              with open(dest_path, 'w', encoding='utf-8') as f:
+                  f.writelines(clean_lines)
+
+          source_dir = Path("hr_files")
+          if source_dir.exists():
+              # 1. Process Python submissions
+              for file_path in source_dir.rglob("*"):
+                  if file_path.is_file() and not any(part.startswith('.') for part in file_path.parts):
+                      problem_folder = file_path.parent.name
+                      
+                      if file_path.suffix in ['.py', '.py3']:
+                          dest_dir = py_target / problem_folder
+                          dest_dir.mkdir(parents=True, exist_ok=True)
+                          print(f"Cleaning and routing Python code: {file_path.name}")
+                          clean_file_content(file_path, dest_dir / file_path.name)
+                          
+                      # 2. Process all SQL dialect submissions (.sql, .mysql, .mssql, .oracle)
+                      elif file_path.suffix in ['.sql', '.mysql', '.mssql', '.oracle']:
+                          dest_dir = sql_target / problem_folder
+                          dest_dir.mkdir(parents=True, exist_ok=True)
+                          print(f"Cleaning and routing SQL code: {file_path.name}")
+                          clean_file_content(file_path, dest_dir / file_path.name)
+
+      - name: 4. Deploy Clean Code Updates to Master Branch
         run: |
           cd main_repo
           
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
           
-          # Stage the newly populated practice folders
+          # Stage the cleaned files
           git add "python/hackerrank python practice/" "sql/hackerrank sql practice/"
 
-          # Check changes and push to master branch safely
           if ! git diff --cached --quiet; then
-            echo "New files detected! Committing to master branch..."
-            git commit -m "Automated Sync: HackerRank practices cleanly structured"
+            echo "New pure code changes detected! Committing to master branch..."
+            git commit -m "Automated Sync: Cleaned solution code imported without header comments"
             git push origin master
           else
             echo "Everything is already perfectly up to date!"
