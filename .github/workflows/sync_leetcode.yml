@@ -1,43 +1,58 @@
-name: Sync and Sort Leetcode Submissions
-on:
-workflow_dispatch:
-schedule:
-- cron: "0 0 * * *"
-jobs:
-build:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout Repo
-uses: actions/checkout@v4
-with:
-fetch-depth: 0
-- name: Fetch LeetCode Solutions
-uses: joshcai/leetcode-sync@v1.7
-with:
-github-token: ${{ github.token }}
-leetcode-csrf-token: ${{ secrets.LEETCODE_CSRF_TOKEN }}
-leetcode-session: ${{ secrets.LEETCODE_SESSION }}
-destination-folder: 'staging_zone'
-- name: Route Files to Correct Folders
-run: |
-mkdir -p "python/leetcode python practice"
-mkdir -p "sql/leetcode sql practice"
-if [ -d "staging_zone" ]; then
-echo "Sorting files..."
-for dir in staging_zone//; do
-if [ -d "$dir" ]; then
-if ls "$dir".py >/dev/null 2>&1; then
-echo "Moving Python problem: $dir"
-cp -r "$dir" "python/leetcode python practice/"
-elif ls "$dir".sql >/dev/null 2>&1 || ls "\(dir"*.mysql >/dev/null 2>&1 \vert{}\vert{} ls "\)dir".mssql >/dev/null 2>&1; then
-echo "Moving SQL problem: $dir"
-cp -r "$dir" "sql/leetcode sql practice/"
-else
-echo "Defaulting database file to SQL folder: $dir"
-cp -r "$dir" "sql/leetcode sql practice/"
-fi
-fi
-done
-rm -rf staging_zone
-fi
+name: Sync LeetCode Submissions
 
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *' # Runs every day at midnight
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Sync LeetCode to Staging Zone
+        uses: joshcai/leetcode-sync@v1.7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          leetcode-csrf-token: ${{ secrets.LEETCODE_CSRF_TOKEN }}
+          leetcode-session: ${{ secrets.LEETCODE_SESSION }}
+          destination-folder: 'staging_zone'
+
+      - name: Organize Files and Purge Staging Zone
+        run: |
+          # Create target directories if they don't exist
+          mkdir -p "sql/leetcode sql practice"
+          mkdir -p "python/leetcode python practice"
+
+          # Check if staging_zone exists and has files
+          if [ -d "staging_zone" ]; then
+            # Move SQL files (.sql extensions)
+            find staging_zone -type f \( -name "*.sql" \) -exec mv {} "sql/leetcode sql practice/" \; 2>/dev/null || true
+
+            # Move Python files (.py extensions)
+            find staging_zone -type f \( -name "*.py" \) -exec mv {} "python/leetcode python practice/" \; 2>/dev/null || true
+
+            # Wipe out the staging_zone folder completely from git tracking
+            git rm -rf staging_zone --ignore-unmatch
+            rm -rf staging_zone
+          fi
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add "sql/leetcode sql practice/*" "python/leetcode python practice/*"
+          
+          # Commit only if there are changes to avoid workflow errors
+          if ! git diff --cached --quiet; then
+            git commit -m "Sync and organize LeetCode submissions"
+            git push origin master
+          else
+            echo "No new changes to commit."
+          fi
