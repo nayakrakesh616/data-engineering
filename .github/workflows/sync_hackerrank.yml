@@ -12,50 +12,67 @@ jobs:
       contents: write
 
     steps:
-      - name: 1. Checkout Repository
+      - name: Checkout Code Base
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: 2. Clone HackerRank Solutions
+      - name: Process Submissions
         run: |
-          git clone https://github.com{{ github.repository_owner }}/hackerrank-solutions.git hr_files
+          # 1. Create target structural folders cleanly
+          mkdir -p "sql/hackerrank sql practice"
+          mkdir -p "python/hackerrank python practice"
 
-      - name: 3. Process and Move Files via Python
-        shell: python
+          # 2. Clone the public submissions repository safely into a temporary folder
+          echo "Cloning hackerrank-solutions repository..."
+          git clone https://github.com{{ github.repository_owner }}/hackerrank-solutions.git hr_files || true
+
+          # 3. Deep scan and copy files matching the exact folder paths
+          if [ -d "hr_files" ]; then
+            echo "Scanning deep directories for files..."
+            
+            # Find all Python files (.py or .py3) at any depth level
+            find hr_files -type f \( -name "*.py" -o -name "*.py3" \) | while read -r file; do
+              # Extract the problem folder name (e.g., 'py-if-else')
+              problem_folder=$(basename "$(dirname "$file")")
+              
+              # Build the specific target directory path
+              target_dir="python/hackerrank python practice/$problem_folder"
+              mkdir -p "$target_dir"
+              
+              echo "Moving Python solution into: $target_dir"
+              cp "$file" "$target_dir/"
+            done
+            
+            # Find all SQL files at any depth level
+            find hr_files -type f \( -name "*.sql" -o -name "*.mysql" \) | while read -r file; do
+              problem_folder=$(basename "$(dirname "$file")")
+              target_dir="sql/hackerrank sql practice/$problem_folder"
+              mkdir -p "$target_dir"
+              
+              echo "Moving SQL solution into: $target_dir"
+              cp "$file" "$target_dir/"
+            done
+            
+            # Clean up the runner disk space
+            rm -rf hr_files
+          fi
+
+      - name: Deploy Structural Updates
         run: |
-          import os
-          import shutil
-          from pathlib import Path
-
-          # Setup primary targets directories
-          sql_target = Path("sql/hackerrank sql practice")
-          py_target = Path("python/hackerrank python practice")
+          # Configure commit profile safely (Removed the problematic --local flag)
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
           
-          sql_target.mkdir(parents=True, exist_ok=True)
-          py_target.mkdir(parents=True, exist_ok=True)
+          # Stage tracking changes safely
+          git add "python/hackerrank python practice/" "sql/hackerrank sql practice/"
 
-          source_dir = Path("hr_files")
-          if source_dir.exists():
-              # Recursively seek files
-              for file_path in source_dir.rglob("*"):
-                  if file_path.is_file() and not any(part.startswith('.') for part in file_path.parts):
-                      # Identify Python files
-                      if file_path.suffix in ['.py', '.py3']:
-                          print(f"Routing Python solution: {file_path.name}")
-                          shutil.copy(file_path, py_target / file_path.name)
-                      
-                      # Identify SQL files
-                      elif file_path.suffix in ['.sql', '.mysql']:
-                          print(f"Routing SQL solution: {file_path.name}")
-                          shutil.copy(file_path, sql_target / file_path.name)
-
-      - name: 4. Workspace Cleanup
-        run: rm -rf hr_files
-
-      - name: 5. Push Clean Structure
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Automated Sync: HackerRank practices organized by domain folders"
-          branch: master
+          # Only commit and push if new solution files were actually extracted
+          if ! git diff --cached --quiet; then
+            echo "New files detected! Committing changes..."
+            git commit -m "Automated Sync: HackerRank practices organized by domain folders"
+            git push origin master
+          else
+            echo "Everything is already perfectly up to date!"
+          fi
