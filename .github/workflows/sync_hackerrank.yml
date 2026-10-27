@@ -32,54 +32,30 @@ jobs:
           mkdir -p "main_repo/sql/hackerrank sql practice"
           mkdir -p "main_repo/python/hackerrank python practice"
 
-          if [ -d "hr_files/solutions" ]; then
-            echo "Solutions directory found! Parsing all programming streams..."
+          echo "Scanning all downloaded solutions..."
+          
+          # --- PYTHON EXTRACTOR ---
+          # Look for any Python challenge code files inside the cloned repo
+          find hr_files -type f \( -name "*.py" -o -name "*.py3" \) ! -path '*/.*' | while read -r file; do
+            # Extract the actual challenge folder slug name (e.g., 'py-if-else')
+            problem_folder=$(basename "$(dirname "$file")")
+            target_dir="main_repo/python/hackerrank python practice/$problem_folder"
             
-            # --- PYTHON EXTRACTOR ---
-            # Finds python scripts and challenge details anywhere inside the root solutions tree
-            find hr_files/solutions -type f | while read -r file; do
-              lowercase_path=$(echo "$file" | tr '[:upper:]' '[:lower:]')
-              
-              if [[ "$lowercase_path" == *"/python/"* || "$lowercase_path" == *"/python3/"* ]]; then
-                problem_folder=$(basename "$(dirname "$file")")
-                target_dir="main_repo/python/hackerrank python practice/$problem_folder"
-                mkdir -p "$target_dir"
-                
-                # Check if it's the challenge document to rename it clearly to avoid collisions
-                if [ "$(basename "$file")" = "README.md" ]; then
-                  echo "Routing Python Question details into: $problem_folder"
-                  cp "$file" "$target_dir/problem-details.md"
-                else
-                  echo "Routing Python Code solution into: $problem_folder"
-                  cp "$file" "$target_dir/"
-                fi
-              fi
-            done
+            mkdir -p "$target_dir"
+            echo "Routing Python challenge to: python/hackerrank python practice/$problem_folder"
+            cp "$file" "$target_dir/"
+          done
+          
+          # --- MULTI-DIALECT SQL EXTRACTOR ---
+          # Look for any SQL dialect challenge files inside the cloned repo
+          find hr_files -type f \( -name "*.sql" -o -name "*.mysql" -o -name "*.mssql" -o -name "*.oracle" \) ! -path '*/.*' | while read -r file; do
+            problem_folder=$(basename "$(dirname "$file")")
+            target_dir="main_repo/sql/hackerrank sql practice/$problem_folder"
             
-            # --- MULTI-DIALECT SQL EXTRACTOR ---
-            # Scans every folder path containing sql, mysql, mssql, oracle, or plsql keywords
-            find hr_files/solutions -type f | while read -r file; do
-              # Convert the full file path to lowercase to test dialects safely
-              lowercase_path=$(echo "$file" | tr '[:upper:]' '[:lower:]')
-              
-              if [[ "$lowercase_path" == *"/sql/"* || "$lowercase_path" == *"/mysql/"* || "$lowercase_path" == *"/mssql/"* || "$lowercase_path" == *"/oracle/"* || "$lowercase_path" == *"/plsql/"* ]]; then
-                problem_folder=$(basename "$(dirname "$file")")
-                target_dir="main_repo/sql/hackerrank sql practice/$problem_folder"
-                mkdir -p "$target_dir"
-                
-                # If it's a documentation README, rename it to problem-details.md inside the subfolder
-                if [ "$(basename "$file")" = "README.md" ]; then
-                  echo "Routing SQL Question details into: $problem_folder"
-                  cp "$file" "$target_dir/problem-details.md"
-                else
-                  echo "Routing SQL Dialect Solution [$(basename "$file")] into: $problem_folder"
-                  cp "$file" "$target_dir/"
-                fi
-              fi
-            done
-          else
-            echo "No files found in the source solutions repository path yet."
-          fi
+            mkdir -p "$target_dir"
+            echo "Routing SQL challenge to: sql/hackerrank sql practice/$problem_folder"
+            cp "$file" "$target_dir/"
+          done
 
       - name: 4. Deploy Structural Updates to Master Branch
         run: |
@@ -94,7 +70,7 @@ jobs:
           # Check changes and push to master branch safely
           if ! git diff --cached --quiet; then
             echo "New files detected! Committing to master branch..."
-            git commit -m "Automated Sync: HackerRank practices organized by domain folders (Code & Question Details Included)"
+            git commit -m "Automated Sync: HackerRank practices cleanly structured"
             git push origin master
           else
             echo "Everything is already perfectly up to date!"
