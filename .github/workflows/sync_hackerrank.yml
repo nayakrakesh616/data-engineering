@@ -20,59 +20,41 @@ jobs:
 
       - name: Process Submissions
         run: |
-          # 1. Create target structural folders cleanly
+          # 1. Force clean the target directory structure
           mkdir -p "sql/hackerrank sql practice"
           mkdir -p "python/hackerrank python practice"
 
-          # 2. Clone the public submissions repository safely into a temporary folder
+          # 2. Clone the public submissions repo (Removed '|| true' to see explicit errors)
           echo "Cloning hackerrank-solutions repository..."
-          git clone https://github.com{{ github.repository_owner }}/hackerrank-solutions.git hr_files || true
+          git clone https://github.com hr_files
 
-          # 3. Deep scan and copy files matching the exact folder paths
-          if [ -d "hr_files" ]; then
-            echo "Scanning deep directories for files..."
+          # 3. Verify if files exist and move them explicitly without subshell loops
+          if [ -d "hr_files/solutions" ]; then
+            echo "Solutions directory found! Copying files..."
             
-            # Find all Python files (.py or .py3) at any depth level
-            find hr_files -type f \( -name "*.py" -o -name "*.py3" \) | while read -r file; do
-              # Extract the problem folder name (e.g., 'py-if-else')
-              problem_folder=$(basename "$(dirname "$file")")
-              
-              # Build the specific target directory path
-              target_dir="python/hackerrank python practice/$problem_folder"
-              mkdir -p "$target_dir"
-              
-              echo "Moving Python solution into: $target_dir"
-              cp "$file" "$target_dir/"
-            done
-            
-            # Find all SQL files at any depth level
-            find hr_files -type f \( -name "*.sql" -o -name "*.mysql" \) | while read -r file; do
-              problem_folder=$(basename "$(dirname "$file")")
-              target_dir="sql/hackerrank sql practice/$problem_folder"
-              mkdir -p "$target_dir"
-              
-              echo "Moving SQL solution into: $target_dir"
-              cp "$file" "$target_dir/"
-            done
-            
-            # Clean up the runner disk space
-            rm -rf hr_files
+            # Use standard find and copy directly to target folders
+            find hr_files/solutions -type f \( -name "*.py" -o -name "*.py3" \) -exec cp {} "python/hackerrank python practice/" \; 2>/dev/null || true
+            find hr_files/solutions -type f \( -name "*.sql" -o -name "*.mysql" \) -exec cp {} "sql/hackerrank sql practice/" \; 2>/dev/null || true
+          else
+            echo "Warning: solutions directory not found in the cloned repository layout."
           fi
+
+          # Clean up the temp cloning directory
+          rm -rf hr_files
 
       - name: Deploy Structural Updates
         run: |
-          # Configure commit profile safely (Removed the problematic --local flag)
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
           
-          # Stage tracking changes safely
+          # Stage the newly populated practice folders
           git add "python/hackerrank python practice/" "sql/hackerrank sql practice/"
 
-          # Only commit and push if new solution files were actually extracted
+          # Check changes and push to master branch
           if ! git diff --cached --quiet; then
-            echo "New files detected! Committing changes..."
+            echo "Changes detected! Committing to master..."
             git commit -m "Automated Sync: HackerRank practices organized by domain folders"
             git push origin master
           else
-            echo "Everything is already perfectly up to date!"
+            echo "No new files were transferred. Repository is up to date."
           fi
