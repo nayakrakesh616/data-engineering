@@ -8,37 +8,30 @@ on:
 jobs:
   sync_job:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: 1. Checkout Data Engineering Repo
+      - name: 1. Checkout HackerRank Solutions Repo
         uses: actions/checkout@v4
         with:
+          repository: '${{ github.repository_owner }}/hackerrank-solutions'
+          ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
+          path: hr_files
 
-      - name: 2. Download and Sort Submissions
+      - name: 2. Process, Clean Headers, and Commit via GitHub API
         shell: python
         run: |
           import os
-          import subprocess
+          import base64
+          import urllib.request
+          import json
           from pathlib import Path
 
-          # Setup main repository targets
-          sql_target = Path("sql/hackerrank sql practice")
-          py_target = Path("python/hackerrank python practice")
+          # Setup basic API transaction contexts
+          token = "${{ secrets.GITHUB_TOKEN }}"
+          repo = os.environ.get('GITHUB_REPOSITORY') # Targets your 'data-engineering' repo
           
-          sql_target.mkdir(parents=True, exist_ok=True)
-          py_target.mkdir(parents=True, exist_ok=True)
-
-          # Safely clone the public helper repository using a standard terminal command
-          print("Downloading solutions from helper repository...")
-          repo_owner = os.environ.get('GITHUB_REPOSITORY_OWNER')
-          clone_url = f"https://github.com{repo_owner}/hackerrank-solutions.git"
-          subprocess.run(["git", "clone", "-b", "main", clone_url, "temp_hr_files"], check=True)
-
-          def clean_file_content(source_path, dest_path):
+          def clean_file_content(source_path):
               """Reads the file and discards the metadata text injected at the top."""
               with open(source_path, 'r', encoding='utf-8', errors='ignore') as f:
                   lines = f.readlines()
@@ -52,12 +45,45 @@ jobs:
               clean_lines = lines[cut_index:]
               while clean_lines and not clean_lines.strip():
                   clean_lines.pop(0)
-                  
-              with open(dest_path, 'w', encoding='utf-8') as f:
-                  f.writelines(clean_lines)
+              return "".join(clean_lines)
 
-          source_dir = Path("temp_hr_files")
-          ignored_path_parts = {'solutions', 'easy', 'medium', 'hard', 'oracle', 'mysql', 'mssql', 'sql', 'python', 'python3', 'temp_hr_files'}
+          def get_sha(repo_path):
+              """Checks if the file already exists on master branch to get its tracking SHA hash."""
+              url = f"https://github.com{repo}/contents/{repo_path}?ref=master"
+              req = urllib.request.Request(url)
+              req.add_header("Authorization", f"token {token}")
+              try:
+                  with urllib.request.urlopen(req) as response:
+                      data = json.loads(response.read().decode())
+                      return data.get("sha")
+              except Exception:
+                  return None
+
+          def upload_to_github(repo_path, file_content):
+              """Directly updates or creates files on the master branch via the GitHub Contents API."""
+              sha = get_sha(repo_path)
+              url = f"https://github.com{repo}/contents/{repo_path}"
+              
+              payload = {
+                  "message": f"Automated Sync: Cleaned solution uploaded for {Path(repo_path).name}",
+                  "content": base64.b64encode(file_content.encode('utf-8')).decode('utf-8'),
+                  "branch": "master"
+              }
+              if sha:
+                  payload["sha"] = sha
+
+              req = urllib.request.Request(url, method="PUT")
+              req.add_header("Authorization", f"token {token}")
+              req.add_header("Content-Type", "application/json")
+              
+              try:
+                  with urllib.request.urlopen(req, data=json.dumps(payload).encode('utf-8')) as response:
+                      print(f"Successfully deployed: {repo_path}")
+              except Exception as e:
+                  print(f"Failed to deploy {repo_path}: {e}")
+
+          source_dir = Path("hr_files")
+          ignored_path_parts = {'solutions', 'easy', 'medium', 'hard', 'oracle', 'mysql', 'mssql', 'sql', 'python', 'python3', 'hr_files'}
 
           if source_dir.exists():
               for file_path in source_dir.rglob("*"):
@@ -75,42 +101,16 @@ jobs:
                           problem_folder = file_path.parent.name
                           
                       lowercase_path = str(file_path).lower()
+                      pure_content = clean_file_content(file_path)
                       
-                      # Routing logic for Python files
+                      # Identify and process Python scripts
                       if file_path.suffix in ['.py', '.py3'] or 'python' in lowercase_path:
-                          dest_dir = py_target / problem_folder
-                          dest_dir.mkdir(parents=True, exist_ok=True)
-                          print(f"Syncing Python file: {file_path.name} -> {problem_folder}")
-                          clean_file_content(file_path, dest_dir / file_path.name)
+                          target_repo_path = f"python/hackerrank python practice/{problem_folder}/{file_path.name}"
+                          print(f"Processing Python: {file_path.name}")
+                          upload_to_github(target_repo_path, pure_content)
                           
-                      # Routing logic for all SQL dialects (Oracle, MySQL, SQL Server, PL/SQL)
+                      # Identify and process all SQL dialect scripts (MySQL, Oracle, PL/SQL, etc.)
                       elif file_path.suffix in ['.sql', '.mysql', '.mssql', '.oracle'] or any(d in lowercase_path for d in ['sql', 'mysql', 'mssql', 'oracle', 'plsql']):
-                          dest_dir = sql_target / problem_folder
-                          dest_dir.mkdir(parents=True, exist_ok=True)
-                          print(f"Syncing SQL file: {file_path.name} -> {problem_folder}")
-                          clean_file_content(file_path, dest_dir / file_path.name)
-
-          # Remove the temporary files path cleanly
-          if os.path.exists("temp_hr_files"):
-              subprocess.run(["rm", "-rf", "temp_hr_files"])
-
-      - name: 3. Commit and Deploy Updates to Master Branch
-        run: |
-          # Configure commit profile
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-          
-          # Stage the newly populated practice folders explicitly
-          git add "python/hackerrank python practice/" "sql/hackerrank sql practice/"
-
-          # Check changes and push to master branch safely via token injection URL
-          if ! git diff --cached --quiet; then
-            echo "New pure files detected! Committing changes..."
-            git commit -m "Automated Sync: HackerRank challenge solutions structured cleanly"
-            
-            # Use authenticated remote tracking URL to guarantee force pushing authorization
-            git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com{{ github.repository }}.git"
-            git push origin master
-          else
-            echo "Everything is already perfectly up to date!"
-          fi
+                          target_repo_path = f"sql/hackerrank sql practice/{problem_folder}/{file_path.name}"
+                          print(f"Processing SQL Dialect: {file_path.name}")
+                          upload_to_github(target_repo_path, pure_content)
