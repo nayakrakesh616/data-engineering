@@ -1,4 +1,4 @@
-name: Sync & Sort Leetcode Submissions
+name: Sync and Sort Leetcode Submissions
 on:
 workflow_dispatch:
 schedule:
@@ -27,16 +27,17 @@ echo "Sorting files..."
 for dir in staging_zone//; do
 if [ -d "$dir" ]; then
 if ls "$dir".py >/dev/null 2>&1; then
-echo "Moving Python: $dir"
+echo "Moving Python problem: $dir"
 cp -r "$dir" "python/leetcode python practice/"
 elif ls "$dir".sql >/dev/null 2>&1 || ls "\(dir"*.mysql >/dev/null 2>&1 \vert{}\vert{} ls "\)dir".mssql >/dev/null 2>&1; then
-echo "Moving SQL: $dir"
+echo "Moving SQL problem: $dir"
 cp -r "$dir" "sql/leetcode sql practice/"
 else
-echo "Defaulting database file to SQL practice folder: $dir"
+echo "Defaulting database file to SQL folder: $dir"
 cp -r "$dir" "sql/leetcode sql practice/"
 fi
 fi
 done
 rm -rf staging_zone
 fi
+
