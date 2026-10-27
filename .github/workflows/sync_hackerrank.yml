@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: '${{ github.repository_owner }}/hackerrank-solutions'
-          ref: main # Target the extension's branch explicitly
+          ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
           path: hr_files
 
@@ -45,7 +45,6 @@ jobs:
                   lines = f.readlines()
               
               cut_index = 0
-              # Look for the footer line of the header comments block
               for idx, line in enumerate(lines[:20]):
                   clean_line = line.strip()
                   if any(k in clean_line for k in ['-- Link', '# Link', '-- Problem', '# Problem', 'Language', 'Subdomain', '-------', '=======']):
@@ -53,15 +52,13 @@ jobs:
               
               clean_lines = lines[cut_index:]
               
-              # Strip lingering top empty spaces
-              while clean_lines and not clean_lines[0].strip():
+              while clean_lines and not clean_lines.strip():
                   clean_lines.pop(0)
                   
               with open(dest_path, 'w', encoding='utf-8') as f:
                   f.writelines(clean_lines)
 
           source_dir = Path("hr_files")
-          # List of keywords to skip when searching for the true problem directory name
           ignored_path_parts = {'solutions', 'easy', 'medium', 'hard', 'oracle', 'mysql', 'mssql', 'sql', 'python', 'python3', 'hr_files'}
 
           if source_dir.exists():
@@ -70,7 +67,6 @@ jobs:
                       if file_path.name == "README.md":
                           continue
                           
-                      # Determine the real challenge folder by filtering out system keyword paths
                       problem_folder = None
                       for part in reversed(file_path.parts[:-1]):
                           if part.lower() not in ignored_path_parts:
@@ -82,32 +78,23 @@ jobs:
                           
                       lowercase_path = str(file_path).lower()
                       
-                      # File distribution logic
+                      # Identify Python solutions
                       if file_path.suffix in ['.py', '.py3'] or 'python' in lowercase_path:
                           dest_dir = py_target / problem_folder
                           dest_dir.mkdir(parents=True, exist_ok=True)
-                          print(f"Cleaning and processing Python file: {file_path.name} -> {problem_folder}")
+                          print(f"Syncing Python file: {file_path.name} -> {problem_folder}")
                           clean_file_content(file_path, dest_dir / file_path.name)
                           
+                      # Identify all SQL dialects (MySQL, Oracle, SQL Server, PL/SQL)
                       elif file_path.suffix in ['.sql', '.mysql', '.mssql', '.oracle'] or any(d in lowercase_path for d in ['sql', 'mysql', 'mssql', 'oracle', 'plsql']):
                           dest_dir = sql_target / problem_folder
                           dest_dir.mkdir(parents=True, exist_ok=True)
-                          print(f"Cleaning and processing SQL Dialect file: {file_path.name} -> {problem_folder}")
+                          print(f"Syncing SQL file: {file_path.name} -> {problem_folder}")
                           clean_file_content(file_path, dest_dir / file_path.name)
 
-      - name: 4. Deploy Clean Code Updates to Master Branch
-        run: |
-          cd main_repo
-          
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-          
-          git add "python/hackerrank python practice/" "sql/hackerrank sql practice/"
-
-          if ! git diff --cached --quiet; then
-            echo "New solution assets found. Pushing up updates..."
-            git commit -m "Automated Sync: HackerRank challenge solutions structured by topic folders"
-            git push origin master
-          else
-            echo "All structural sync files are already up to date!"
-          fi
+      - name: 4. Deploy Clean Code Updates
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          repository: main_repo
+          commit_message: "Automated Sync: HackerRank challenge solutions structured cleanly"
+          branch: master
