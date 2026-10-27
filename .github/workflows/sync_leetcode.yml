@@ -26,37 +26,48 @@ jobs:
           leetcode-session: ${{ secrets.LEETCODE_SESSION }}
           destination-folder: 'staging_zone'
 
-      - name: Pull Action Commits and Re-organize
+      - name: Pull Remote Changes and Route Files
         run: |
-          # The action commits directly to the remote repository. 
-          # We must pull those automated commits first to avoid conflict failures.
-          git pull origin master
+          # 1. Pull the automated commit made by the leetcode-sync action
+          git pull origin master --rebase
 
-          # Create the final target directories
+          # 2. Create the target directories if they don't exist
           mkdir -p "sql/leetcode sql practice"
           mkdir -p "python/leetcode python practice"
 
-          # Relocate SQL files
-          find staging_zone -type f \( -name "*.sql" \) -exec mv {} "sql/leetcode sql practice/" \; 2>/dev/null || true
+          # 3. If staging_zone exists, organize files by type
+          if [ -d "staging_zone" ]; then
+            echo "Sorting files into target folders..."
+            
+            # Move Python folders/files
+            find staging_zone -type f \( -name "*.py" \) | while read -r file; do
+              parent_dir=$(basename "$(dirname "$file")")
+              mkdir -p "python/leetcode python practice/$parent_dir"
+              cp "$file" "python/leetcode python practice/$parent_dir/"
+            done
 
-          # Relocate Python files
-          find staging_zone -type f \( -name "*.py" \) -exec mv {} "python/leetcode python practice/" \; 2>/dev/null || true
+            # Move SQL folders/files
+            find staging_zone -type f \( -name "*.sql" -o -name "*.mysql" -o -name "*.mssql" \) | while read -r file; do
+              parent_dir=$(basename "$(dirname "$file")")
+              mkdir -p "sql/leetcode sql practice/$parent_dir"
+              cp "$file" "sql/leetcode sql practice/$parent_dir/"
+            done
 
-          # Wipe out the staging_zone completely from Git tracking history
-          git rm -rf staging_zone --ignore-unmatch
-          rm -rf staging_zone
+            # 4. Completely purge the staging_zone folder out of git tracking history
+            git rm -rf staging_zone --ignore-unmatch
+            rm -rf staging_zone
+          fi
 
-          # Configure Git credentials for pushing the layout adjustment
+      - name: Commit and Push to Master
+        run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # Stage the moved folders and the deletion of staging_zone
           git add "sql/leetcode sql practice/" "python/leetcode python practice/"
 
-          # Commit and push only if structural changes were made
           if ! git diff --cached --quiet; then
-            git commit -m "Clean repo structure: route scripts from staging to specific languages"
+            git commit -m "Automated reorganization of LeetCode practices"
             git push origin master
           else
-            echo "Structure matches target architecture perfectly. No action needed."
+            echo "Folders are already fully organized."
           fi
