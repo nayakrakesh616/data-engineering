@@ -48,3 +48,16 @@ print(length, '\n', width, '\n', height)
 
 name,age,city = "Rakesh", 25, "Delhi"
 print("my name is: ", name, "\nmy age is: ", age, "\nmy city is: ", city)
+
+name, age, city, color, fav_num = ("Meera", 30, "Pune", "green", 7)
+print(
+ name,
+ "is",
+ age,
+ "years old, lives in",
+ city,
+ ", loves",
+ color,
+ ", and picked the number",
+ fav_num,
+)
