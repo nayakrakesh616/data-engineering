@@ -90,8 +90,27 @@ jobs:
                           print(f"Syncing SQL file: {file_path.name} -> {problem_folder}")
                           clean_file_content(file_path, dest_dir / file_path.name)
 
-      - name: 3. Deploy Clean Code Updates
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Automated Sync: HackerRank challenge solutions structured cleanly"
-          branch: master
+          # Remove the temporary files path cleanly
+          if os.path.exists("temp_hr_files"):
+              subprocess.run(["rm", "-rf", "temp_hr_files"])
+
+      - name: 3. Commit and Deploy Updates to Master Branch
+        run: |
+          # Configure commit profile
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          
+          # Stage the newly populated practice folders explicitly
+          git add "python/hackerrank python practice/" "sql/hackerrank sql practice/"
+
+          # Check changes and push to master branch safely via token injection URL
+          if ! git diff --cached --quiet; then
+            echo "New pure files detected! Committing changes..."
+            git commit -m "Automated Sync: HackerRank challenge solutions structured cleanly"
+            
+            # Use authenticated remote tracking URL to guarantee force pushing authorization
+            git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com{{ github.repository }}.git"
+            git push origin master
+          else
+            echo "Everything is already perfectly up to date!"
+          fi
