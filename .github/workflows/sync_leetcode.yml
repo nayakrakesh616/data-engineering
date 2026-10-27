@@ -26,48 +26,59 @@ jobs:
           leetcode-session: ${{ secrets.LEETCODE_SESSION }}
           destination-folder: 'staging_zone'
 
-      - name: Pull Remote Changes and Route Files
+      - name: Pull Remote Changes, Clean Mess, and Route Files
         run: |
-          # 1. Pull the automated commit made by the leetcode-sync action
+          # 1. Pull the automated commit made by the leetcode-sync action to avoid conflicts
           git pull origin master --rebase
 
-          # 2. Create the target directories if they don't exist
+          # 2. Create the exact target subfolders required
           mkdir -p "sql/leetcode sql practice"
           mkdir -p "python/leetcode python practice"
 
-          # 3. If staging_zone exists, organize files by type
+          # 3. FIX THE EXISTING MESS (Move scattered folders already inside sql/ into the subfolder)
+          echo "Cleaning up existing scattered folders..."
+          for item in sql/*; do
+            # Skip the target practice folder, README, and your postgres session file
+            if [ "$item" != "sql/leetcode sql practice" ] && [ "$item" != "sql/README.md" ] && [ "$item" != "sql/postgre sql.session.sql" ] && [ -d "$item" ]; then
+              echo "Moving existing folder $item to sql/leetcode sql practice/"
+              mv "$item" "sql/leetcode sql practice/"
+            fi
+          done
+
+          # 4. PROCESS NEW FILES FROM STAGING_ZONE (For future runs)
           if [ -d "staging_zone" ]; then
-            echo "Sorting files into target folders..."
+            echo "Sorting newly synced files from staging_zone..."
             
-            # Move Python folders/files
+            # Route Python problems
             find staging_zone -type f \( -name "*.py" \) | while read -r file; do
               parent_dir=$(basename "$(dirname "$file")")
               mkdir -p "python/leetcode python practice/$parent_dir"
               cp "$file" "python/leetcode python practice/$parent_dir/"
             done
 
-            # Move SQL folders/files
+            # Route SQL problems (.sql, .mysql, .mssql)
             find staging_zone -type f \( -name "*.sql" -o -name "*.mysql" -o -name "*.mssql" \) | while read -r file; do
               parent_dir=$(basename "$(dirname "$file")")
               mkdir -p "sql/leetcode sql practice/$parent_dir"
               cp "$file" "sql/leetcode sql practice/$parent_dir/"
             done
 
-            # 4. Completely purge the staging_zone folder out of git tracking history
+            # 5. Completely wipe out staging_zone from tracking and workspace
             git rm -rf staging_zone --ignore-unmatch
             rm -rf staging_zone
           fi
 
-      - name: Commit and Push to Master
+      - name: Commit and Push Clean Structure
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          git add "sql/leetcode sql practice/" "python/leetcode python practice/"
+          # Add all changes across both language directories
+          git add python/ sql/
 
           if ! git diff --cached --quiet; then
-            git commit -m "Automated reorganization of LeetCode practices"
+            git commit -m "Fix repository architecture: nested leetcode practice subfolders cleanly organized"
             git push origin master
           else
-            echo "Folders are already fully organized."
+            echo "Repository architecture is already perfectly clean!"
           fi
