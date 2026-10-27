@@ -32,11 +32,11 @@ jobs:
           mkdir -p "main_repo/sql/hackerrank sql practice"
           mkdir -p "main_repo/python/hackerrank python practice"
 
-          # Verify if the extension's solutions folder structure exists
           if [ -d "hr_files/solutions" ]; then
-            echo "Solutions directory found! Copying files across deep folders..."
+            echo "Solutions directory found! Parsing all programming streams..."
             
-            # Find all Python files at any depth level and extract their folder structures
+            # --- PYTHON EXTRACTOR ---
+            # Finds python scripts anywhere inside the root solutions tree
             find hr_files/solutions -type f \( -name "*.py" -o -name "*.py3" \) | while read -r file; do
               problem_folder=$(basename "$(dirname "$file")")
               target_dir="main_repo/python/hackerrank python practice/$problem_folder"
@@ -44,12 +44,23 @@ jobs:
               cp "$file" "$target_dir/"
             done
             
-            # Find all SQL files at any depth level and extract their folder structures
-            find hr_files/solutions -type f \( -name "*.sql" -o -name "*.mysql" \) | while read -r file; do
-              problem_folder=$(basename "$(dirname "$file")")
-              target_dir="main_repo/sql/hackerrank sql practice/$problem_folder"
-              mkdir -p "$target_dir"
-              cp "$file" "$target_dir/"
+            # --- MULTI-DIALECT SQL EXTRACTOR ---
+            # Scans every folder path containing sql, mysql, mssql, oracle, or plsql keywords
+            find hr_files/solutions -type f | while read -r file; do
+              # Convert the full file path to lowercase to test dialects safely
+              lowercase_path=$(echo "$file" | tr '[:upper:]' '[:lower:]')
+              
+              if [[ "$lowercase_path" == *"/sql/"* || "$lowercase_path" == *"/mysql/"* || "$lowercase_path" == *"/mssql/"* || "$lowercase_path" == *"/oracle/"* || "$lowercase_path" == *"/plsql/"* ]]; then
+                # Exclude system metadata files like README templates
+                if [[ "$(basename "$file")" != "README.md" ]]; then
+                  problem_folder=$(basename "$(dirname "$file")")
+                  target_dir="main_repo/sql/hackerrank sql practice/$problem_folder"
+                  mkdir -p "$target_dir"
+                  
+                  echo "Routing SQL Dialect Solution [$(basename "$file")] into: $problem_folder"
+                  cp "$file" "$target_dir/"
+                fi
+              fi
             done
           else
             echo "No files found in the source solutions repository path yet."
@@ -68,7 +79,7 @@ jobs:
           # Check changes and push to master branch safely
           if ! git diff --cached --quiet; then
             echo "New files detected! Committing to master branch..."
-            git commit -m "Automated Sync: HackerRank practices organized by domain folders"
+            git commit -m "Automated Sync: HackerRank practices organized by domain folders (All SQL Dialects Enabled)"
             git push origin master
           else
             echo "Everything is already perfectly up to date!"
