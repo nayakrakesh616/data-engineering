@@ -16,28 +16,27 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          path: main_repo
           fetch-depth: 0
 
-      - name: 2. Checkout HackerRank Solutions Repo
-        uses: actions/checkout@v4
-        with:
-          repository: '${{ github.repository_owner }}/hackerrank-solutions'
-          ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
-          path: hr_files
-
-      - name: 3. Process, Strip Headers, and Route Files
+      - name: 2. Download and Sort Submissions
         shell: python
         run: |
           import os
+          import subprocess
           from pathlib import Path
 
-          sql_target = Path("main_repo/sql/hackerrank sql practice")
-          py_target = Path("main_repo/python/hackerrank python practice")
+          # Setup main repository targets
+          sql_target = Path("sql/hackerrank sql practice")
+          py_target = Path("python/hackerrank python practice")
           
           sql_target.mkdir(parents=True, exist_ok=True)
           py_target.mkdir(parents=True, exist_ok=True)
+
+          # Safely clone the public helper repository using a standard terminal command
+          print("Downloading solutions from helper repository...")
+          repo_owner = os.environ.get('GITHUB_REPOSITORY_OWNER')
+          clone_url = f"https://github.com{repo_owner}/hackerrank-solutions.git"
+          subprocess.run(["git", "clone", "-b", "main", clone_url, "temp_hr_files"], check=True)
 
           def clean_file_content(source_path, dest_path):
               """Reads the file and discards the metadata text injected at the top."""
@@ -51,15 +50,14 @@ jobs:
                       cut_index = idx + 1
               
               clean_lines = lines[cut_index:]
-              
               while clean_lines and not clean_lines.strip():
                   clean_lines.pop(0)
                   
               with open(dest_path, 'w', encoding='utf-8') as f:
                   f.writelines(clean_lines)
 
-          source_dir = Path("hr_files")
-          ignored_path_parts = {'solutions', 'easy', 'medium', 'hard', 'oracle', 'mysql', 'mssql', 'sql', 'python', 'python3', 'hr_files'}
+          source_dir = Path("temp_hr_files")
+          ignored_path_parts = {'solutions', 'easy', 'medium', 'hard', 'oracle', 'mysql', 'mssql', 'sql', 'python', 'python3', 'temp_hr_files'}
 
           if source_dir.exists():
               for file_path in source_dir.rglob("*"):
@@ -78,23 +76,22 @@ jobs:
                           
                       lowercase_path = str(file_path).lower()
                       
-                      # Identify Python solutions
+                      # Routing logic for Python files
                       if file_path.suffix in ['.py', '.py3'] or 'python' in lowercase_path:
                           dest_dir = py_target / problem_folder
                           dest_dir.mkdir(parents=True, exist_ok=True)
                           print(f"Syncing Python file: {file_path.name} -> {problem_folder}")
                           clean_file_content(file_path, dest_dir / file_path.name)
                           
-                      # Identify all SQL dialects (MySQL, Oracle, SQL Server, PL/SQL)
+                      # Routing logic for all SQL dialects (Oracle, MySQL, SQL Server, PL/SQL)
                       elif file_path.suffix in ['.sql', '.mysql', '.mssql', '.oracle'] or any(d in lowercase_path for d in ['sql', 'mysql', 'mssql', 'oracle', 'plsql']):
                           dest_dir = sql_target / problem_folder
                           dest_dir.mkdir(parents=True, exist_ok=True)
                           print(f"Syncing SQL file: {file_path.name} -> {problem_folder}")
                           clean_file_content(file_path, dest_dir / file_path.name)
 
-      - name: 4. Deploy Clean Code Updates
+      - name: 3. Deploy Clean Code Updates
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          repository: main_repo
           commit_message: "Automated Sync: HackerRank challenge solutions structured cleanly"
           branch: master
