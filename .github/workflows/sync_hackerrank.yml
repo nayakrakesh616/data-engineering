@@ -6,43 +6,41 @@ on:
     - cron: '0 6 * * *'
 
 jobs:
-  pull-and-sort-hackerrank:
+  sync_job:
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout Data Engineering Repo
+      - name: 1. Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Fetch and Sort HackerRank Files
+      - name: 2. Clone HackerRank Solutions
         run: |
-          # 1. Create target structural folders cleanly
+          git clone https://github.com{{ github.repository_owner }}/hackerrank-solutions.git hr_files
+
+      - name: 3. Organize Folder Structure
+        run: |
           mkdir -p "sql/hackerrank sql practice"
           mkdir -p "python/hackerrank python practice"
 
-          # 2. Clone the public submissions repository into a temporary folder
-          echo "Cloning hackerrank-solutions repository..."
-          git clone https://github.com{{ github.repository_owner }}/hackerrank-solutions.git temp_hr_repo
+      - name: 4. Move Submissions
+        run: |
+          # Copy Python files if any exist
+          cp -r hr_files/*.py "python/hackerrank python practice/" 2>/dev/null || true
+          cp -r hr_files/**/*.py "python/hackerrank python practice/" 2>/dev/null || true
+          
+          # Copy SQL files if any exist
+          cp -r hr_files/*.sql "sql/hackerrank sql practice/" 2>/dev/null || true
+          cp -r hr_files/**/*.sql "sql/hackerrank sql practice/" 2>/dev/null || true
+          
+          # Remove the temporary folder
+          rm -rf hr_files
 
-          # 3. Copy files out safely if they exist
-          if [ -d "temp_hr_repo" ]; then
-            echo "Sorting files..."
-            
-            # Safely copy any python scripts found inside the repository
-            find temp_hr_repo -type f -name "*.py" -exec cp {} "python/hackerrank python practice/" \; 2>/dev/null || true
-            
-            # Safely copy any sql scripts found inside the repository
-            find temp_hr_repo -type f \( -name "*.sql" -o -name "*.mysql" \) -exec cp {} "sql/hackerrank sql practice/" \; 2>/dev/null || true
-            
-            # Erase the temporary folder workspace
-            rm -rf temp_hr_repo
-          fi
-
-      - name: Automated Commit and Push
+      - name: 5. Push Clean Structure
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Automated Sync: HackerRank practices organized by domain folders"
