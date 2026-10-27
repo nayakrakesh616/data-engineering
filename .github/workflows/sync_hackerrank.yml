@@ -18,54 +18,32 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Run Sync Engine
+      - name: Fetch and Sort HackerRank Files
         run: |
           # 1. Create target structural folders cleanly
           mkdir -p "sql/hackerrank sql practice"
           mkdir -p "python/hackerrank python practice"
 
-          # 2. Clone the public submissions repo safely into a temp folder
+          # 2. Clone the public submissions repository into a temporary folder
           echo "Cloning hackerrank-solutions repository..."
           git clone https://github.com{{ github.repository_owner }}/hackerrank-solutions.git temp_hr_repo
 
-          # 3. Log files present in the cloned repository to track paths
-          echo "=== Found Files in HackerRank Repository ==="
-          find temp_hr_repo -type f ! -path '*/.*'
-          echo "============================================"
-
-          # 4. Migrate and route Python files (.py, .py3)
-          find temp_hr_repo -type f \( -name "*.py" -o -name "*.py3" \) ! -path '*/.*' | while read -r file; do
-            problem_name=$(basename "$(dirname "$file")")
-            # If the parent directory is generic, fall back to the challenge name slug
-            if [ "$problem_name" = "python" ] || [ "$problem_name" = "python3" ] || [ "$problem_name" = "easy" ] || [ "$problem_name" = "medium" ] || [ "$problem_name" = "hard" ]; then
-              problem_name=$(basename "$file" | cut -d. -f1)
-            fi
-            echo "Routing Python challenge to: python/hackerrank python practice/$problem_name"
-            mkdir -p "python/hackerrank python practice/$problem_name"
-            cp "$file" "python/hackerrank python practice/$problem_name/"
-          done
-
-          # 5. Migrate and route SQL files (.sql, .mysql)
-          find temp_hr_repo -type f \( -name "*.sql" -o -name "*.mysql" \) ! -path '*/.*' | while read -r file; do
-            problem_name=$(basename "$(dirname "$file")")
-            if [ "$problem_name" = "sql" ] || [ "$problem_name" = "easy" ] || [ "$problem_name" = "medium" ] || [ "$problem_name" = "hard" ]; then
-              problem_name=$(basename "$file" | cut -d. -f1)
-            fi
-            echo "Routing SQL challenge to: sql/hackerrank sql practice/$problem_name"
-            mkdir -p "sql/hackerrank sql practice/$problem_name"
-            cp "$file" "sql/hackerrank sql practice/$problem_name/"
-          done
-
-          # Clean up local temporary cloning space
-          rm -rf temp_hr_repo
-
-          # 6. Stage and commit changes safely
-          git add python/ sql/ || true
-
-          if ! git diff --cached --quiet; then
-            echo "New files detected, committing to master..."
-            git -c user.name="GitHub Action" -c user.email="action@github.com" commit -m "Automated Sync: HackerRank practices organized by domain folders"
-            git push origin master
-          else
-            echo "No new files or changes found to sync."
+          # 3. Copy files out safely if they exist
+          if [ -d "temp_hr_repo" ]; then
+            echo "Sorting files..."
+            
+            # Safely copy any python scripts found inside the repository
+            find temp_hr_repo -type f -name "*.py" -exec cp {} "python/hackerrank python practice/" \; 2>/dev/null || true
+            
+            # Safely copy any sql scripts found inside the repository
+            find temp_hr_repo -type f \( -name "*.sql" -o -name "*.mysql" \) -exec cp {} "sql/hackerrank sql practice/" \; 2>/dev/null || true
+            
+            # Erase the temporary folder workspace
+            rm -rf temp_hr_repo
           fi
+
+      - name: Automated Commit and Push
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Automated Sync: HackerRank practices organized by domain folders"
+          branch: master
